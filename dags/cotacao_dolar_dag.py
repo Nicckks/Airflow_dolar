@@ -31,11 +31,11 @@ with DAG(
         response = requests.get(url)
         response = response.json()
         logging.info(f"Response from API: {response}")
-        valor = float(response["rates"]["BRL"])
+        valor = response["rates"]["BRL"]
         context["ti"].xcom_push(key="cotacao", value=valor)
 
     def save_to_csv(**context):
-        valor = context["ti"].xcom_pull(key="cotacao")
+        valor = context["ti"].xcom_pull(key="cotacao", task_ids="buscar_cotacao")
         data = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         df = pd.DataFrame([[data, valor]], columns=["data", "cotacao"])
@@ -47,7 +47,7 @@ with DAG(
         )
 
     def insert_into_db(**context):
-        valor = context["ti"].xcom_pull(key="cotacao")
+        valor = context["ti"].xcom_pull(key="cotacao", task_ids="buscar_cotacao")
         data = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         conn = sqlite3.connect("/opt/airflow/dags/cotacoes.db")
@@ -57,14 +57,14 @@ with DAG(
             """
             CREATE TABLE IF NOT EXISTS cotacao_dolar (
                 data TEXT,
-                valor REAL
+                valor DECIMAL(10, 4)
             )
             """
         )
 
         cursor.execute(
             "INSERT INTO cotacao_dolar VALUES (?, ?)",
-            (data, valor),
+            (data, valor)
         )
 
         conn.commit()
